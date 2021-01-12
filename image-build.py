@@ -6,55 +6,78 @@ import os
 import tweepy
 import time
 import logging
+import re
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger()
 
 def main():
     # Authenticate to Twitter
     api = twitter_authentication()
 
-    rand_img = get_random_image("/home/fernanda/Workspace/QuotesBot/images")
-    my_image = Image.open(rand_img)
-
-    test = "\"aqui está um texto com vários caracteres, queria dizer que isso é muito estranho, imagino que não seja tanto assim, thunder, ele repete muito essa palavra, não gosto de músicas que\""
-    test = "\"I love woooo\""
-    #test = "\"iraaaa isso é muuuito estranho, imagino que não\""
-
-    margin = 611
-    offset = 14
-
-    if len(test) <= 100:
-        offset = 212
-
-    title_font = ImageFont.truetype('fonts/Roboto-Regular.ttf', 50)
-    italic_font = ImageFont.truetype('fonts/Roboto-Italic.ttf', 50)
-
-    image_editable = ImageDraw.Draw(my_image)
-
-    text = "\n".join(textwrap.wrap(test, width=23))
-
-    image_editable.text((margin, offset), text, (241, 19, 38), font=title_font)
-
-    offset += (title_font.getsize(text)[1] * len(textwrap.wrap(test, width=23)))
-
-    character = "-Supergirl"
-    image_editable.text((margin, offset), character, (178, 30, 42), font=italic_font)
-
-    my_image.save("result.png")
-
     since_id = check_mentions(api, 1)
 
-    api.update_with_media("result.png")
+    # api.update_with_media("result.png")
 
 def check_mentions(api, since_id):
+    logger.info("Retrieving mentions")
     new_since_id = since_id
     for tweet in tweepy.Cursor(api.mentions_timeline, since_id=since_id).items():
         new_since_id = max(tweet.id, new_since_id)
         if tweet.in_reply_to_status_id is not None:
             continue
-        api.update_status(
-            status="@" + tweet.in_reply_to_screen_name + " olar",
-            in_reply_to_status_id=tweet.id_str,
+        exclude_text = ['@' + tweet.in_reply_to_screen_name]
+        text_tweet = [x for x in tweet.text.split() if x not in exclude_text]
+        text_tweet = ' '.join(text_tweet)
+
+        build_image(text_tweet)
+
+        logger.info(f"Answering to {tweet.user.name}")
+        api.update_with_media(
+            filename= "result.png",
+            in_reply_to_status_id=tweet.id,
+            auto_populate_reply_metadata=True,
         )
     return new_since_id
+
+def get_random_image(folder):
+    media_list = []
+    for dirpath, dirnames, files in os.walk(folder):
+        for f in files:
+            media_list.append(os.path.join(dirpath, f))
+    media = random.choice(media_list)
+    return media
+
+def build_image(text):
+    margin = 611
+    offset = 14
+
+    text = "\"" + text + "\""
+
+    img_path = get_random_image("/home/fernanda/Workspace/QuotesBot/images")
+    img_result = Image.open(img_path)
+
+    if len(text) <= 100:
+        offset = 212
+
+    title_font = ImageFont.truetype('fonts/Roboto-Regular.ttf', 50)
+    italic_font = ImageFont.truetype('fonts/Roboto-Italic.ttf', 50)
+
+    draw_image = ImageDraw.Draw(img_result)
+
+    text_image = "\n".join(textwrap.wrap(text, width=23))
+
+    draw_image.text((margin, offset), text_image, (241, 19, 38), font=title_font)
+
+    offset += (title_font.getsize(text_image)[1] * len(textwrap.wrap(text, width=23)))
+
+    character_name = re.split('/|-', img_path)[-1]
+    character_name = character_name.split('.')[0]
+    character_name = '-' + character_name.replace('_', ' ')
+
+    draw_image.text((margin, offset), character_name, (178, 30, 42), font=italic_font)
+
+    img_result.save("result.png")
 
 def twitter_authentication():
     config = configparser.ConfigParser()
@@ -73,14 +96,6 @@ def twitter_authentication():
         return api
     except:
         print("Error during authentication")
-
-def get_random_image(folder):
-    media_list = []
-    for dirpath, dirnames, files in os.walk(folder):
-        for f in files:
-            media_list.append(os.path.join(dirpath, f))
-    media = random.choice(media_list)
-    return media
 
 if __name__ == "__main__":
     main()
