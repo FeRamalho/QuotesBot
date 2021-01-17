@@ -5,17 +5,26 @@ import random
 import os
 import tweepy
 import time
+import datetime
+import pytz
 import logging
 import re
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logging.basicConfig(filename="log_file.log", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def main():
+    # Current Day
+    day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
+    logger.info("Initializing Bot at: " + day_time)
     # Authenticate to Twitter
     api = twitter_authentication()
 
-    since_id = check_mentions(api, 1)
+    since_id = 1
+    while True:
+        since_id = check_mentions(api, since_id)
+        logger.info("Sleep")
+        time.sleep(60)
 
     # api.update_with_media("result.png")
 
@@ -32,7 +41,8 @@ def check_mentions(api, since_id):
 
         build_image(text_tweet)
 
-        logger.info(f"Answering to {tweet.user.name}")
+        day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
+        logger.info(day_time + f" Answering to {tweet.user.name}")
         api.update_with_media(
             filename= "result.png",
             in_reply_to_status_id=tweet.id,
@@ -92,9 +102,11 @@ def twitter_authentication():
     api = tweepy.API(auth)
     try:
         api.verify_credentials()
+        logger.info("Authentication OK")
         print("Authentication OK")
         return api
     except:
+        logger.error("Error during authentication")
         print("Error during authentication")
 
 if __name__ == "__main__":
