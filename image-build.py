@@ -26,14 +26,20 @@ def main():
         logger.info("Sleep")
         time.sleep(60)
 
-    # api.update_with_media("result.png")
 
 def check_mentions(api, since_id):
+    file_answered = "answered_tweets.txt"
     logger.info("Retrieving mentions")
     new_since_id = since_id
+    lines = None
+
     for tweet in tweepy.Cursor(api.mentions_timeline, since_id=since_id).items():
         new_since_id = max(tweet.id, new_since_id)
         if tweet.in_reply_to_status_id is not None:
+            continue
+        with open(file_answered) as f:
+            lines = f.read().splitlines()
+        if str(tweet.id) in lines:
             continue
         exclude_text = ['@' + tweet.in_reply_to_screen_name]
         text_tweet = [x for x in tweet.text.split() if x not in exclude_text]
@@ -42,12 +48,20 @@ def check_mentions(api, since_id):
         build_image(text_tweet)
 
         day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
-        logger.info(day_time + f" Answering to {tweet.user.name}")
+        logger.info(day_time + f" Answering to {tweet.user.name} - @{tweet.user.screen_name}")
+        logger.info(day_time + f" Tweet ID:{tweet.id}")
         api.update_with_media(
             filename= "result.png",
             in_reply_to_status_id=tweet.id,
             auto_populate_reply_metadata=True,
         )
+
+        with open(file_answered, 'a') as f:
+            print(tweet.id, file=f)
+    
+    if lines and len(lines) > 200:
+        open(file_answered, "w").close()
+
     return new_since_id
 
 def get_random_image(folder):
