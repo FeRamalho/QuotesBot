@@ -50,11 +50,16 @@ def check_mentions(api, since_id):
         day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
         logger.info(day_time + f" Answering to {tweet.user.name} - @{tweet.user.screen_name}")
         logger.info(day_time + f" Tweet ID:{tweet.id}")
-        api.update_with_media(
-            filename= "result.png",
-            in_reply_to_status_id=tweet.id,
-            auto_populate_reply_metadata=True,
-        )
+        try:
+            api.update_with_media(
+                filename= "result.png",
+                in_reply_to_status_id=tweet.id,
+                auto_populate_reply_metadata=True,
+            )
+        except tweepy.TweepError as e:
+            logger.error(e)
+            pass
+        
 
         with open(file_answered, 'a') as f:
             print(tweet.id, file=f)
