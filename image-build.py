@@ -20,49 +20,64 @@ def main():
     # Authenticate to Twitter
     api = twitter_authentication()
 
-    since_id = 1
+    with open("since_tweet.txt", 'r') as f:
+        file_since = f.read()
+    since_id = int(file_since.split('\n')[0])
     while True:
+        a = test_rate_limit(api)
         since_id = check_mentions(api, since_id)
-        logger.info("Sleep")
-        time.sleep(60)
+        with open("since_tweet.txt", 'w') as f:
+            print(since_id, file=f)
+        #logger.info("Sleep")
+        print("fake sleep")
+        time.sleep(30)
 
 
 def check_mentions(api, since_id):
     file_answered = "answered_tweets.txt"
-    logger.info("Retrieving mentions")
+    #logger.info("Retrieving mentions")
+    print("Retrieving mentions")
     new_since_id = since_id
     lines = None
 
-    for tweet in tweepy.Cursor(api.mentions_timeline, since_id=since_id).items():
-        new_since_id = max(tweet.id, new_since_id)
-        if tweet.in_reply_to_status_id is not None:
-            continue
-        with open(file_answered) as f:
-            lines = f.read().splitlines()
-        if str(tweet.id) in lines:
-            continue
-        exclude_text = ['@' + tweet.in_reply_to_screen_name]
-        text_tweet = [x for x in tweet.text.split() if x not in exclude_text]
-        text_tweet = ' '.join(text_tweet)
+    # try:
+    #     tts = api.mentions_timeline()
+    # except:
+    #     print("nao deu")
 
-        build_image(text_tweet)
+    try:
+        for tweet in tweepy.Cursor(api.mentions_timeline, since_id=since_id).items():
+            new_since_id = max(tweet.id, new_since_id)
+            # if tweet.in_reply_to_status_id is not None:
+            #     continue
+            with open(file_answered) as f:
+                lines = f.read().splitlines()
+            if str(tweet.id) in lines:
+                continue
+            exclude_text = ['@' + tweet.in_reply_to_screen_name]
+            text_tweet = [x for x in tweet.text.split() if x not in exclude_text]
+            text_tweet = ' '.join(text_tweet)
 
-        day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
-        logger.info(day_time + f" Answering to {tweet.user.name} - @{tweet.user.screen_name}")
-        logger.info(day_time + f" Tweet ID:{tweet.id}")
-        try:
+            build_image(text_tweet)
+
+            day_time = time.strftime("[%d/%m/%Y - %H:%M:%S]", time.localtime())
+            logger.info(day_time + f" Answering to {tweet.user.name} - @{tweet.user.screen_name}")
+            logger.info(day_time + f" Tweet ID:{tweet.id}")
+            
             api.update_with_media(
                 filename= "result.png",
                 in_reply_to_status_id=tweet.id,
                 auto_populate_reply_metadata=True,
             )
-        except tweepy.TweepError as e:
-            logger.error(e)
-            pass
+            with open(file_answered, 'a') as f:
+                print(tweet.id, file=f)
+    except tweepy.TweepError as e:
+        logger.error(e)
+    #    pass
         
-
-        with open(file_answered, 'a') as f:
-            print(tweet.id, file=f)
+        #except StopIteration:
+        #   break
+        
     
     if lines and len(lines) > 200:
         open(file_answered, "w").close()
@@ -118,7 +133,7 @@ def twitter_authentication():
     oauth_token_secret = twitter_config['oauth_token_secret']
     auth = tweepy.OAuthHandler(api_key, api_secret)
     auth.set_access_token(oauth_token, oauth_token_secret)
-    api = tweepy.API(auth)
+    api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
     try:
         api.verify_credentials()
         logger.info("Authentication OK")
@@ -127,6 +142,42 @@ def twitter_authentication():
     except:
         logger.error("Error during authentication")
         print("Error during authentication")
+
+def test_rate_limit(api, wait=True, buffer=.1):
+    """
+    Tests whether the rate limit of the last request has been reached.
+    :param api: The `tweepy` api instance.
+    :param wait: A flag indicating whether to wait for the rate limit reset
+                 if the rate limit has been reached.
+    :param buffer: A buffer time in seconds that is added on to the waiting
+                   time as an extra safety margin.
+    :return: True if it is ok to proceed with the next request. False otherwise.
+    """
+    #Get the number of remaining requests
+    remaining = int(api.last_response.headers['x-rate-limit-remaining'])
+    #Check if we have reached the limit
+    if remaining == 0:
+        limit = int(api.last_response.headers['x-rate-limit-limit'])
+        reset = int(api.last_response.headers['x-rate-limit-reset'])
+        #Parse the UTC time
+        #reset = datetime.fromtimestamp(reset)
+        #Let the user know we have reached the rate limit
+        print("0 of {} requests remaining until {}.".format(limit, reset))
+
+        if wait:
+            #Determine the delay and sleep
+            #delay = (reset - datetime.now()).total_seconds() + buffer
+            print("Sleeping for 10s...")
+            time.sleep(10)
+            #We have waited for the rate limit reset. OK to proceed.
+            return True
+        else:
+            #We have reached the rate limit. The user needs to handle the rate limit manually.
+            return False 
+
+    #We have not reached the rate limit
+    return True
+
 
 if __name__ == "__main__":
     main()
